@@ -22,8 +22,8 @@ A graphical front-end for the XBPS package manager, written in C++ using GTK 3.
   pkexec/polkit; every privileged command is routed through it, so no repeated
   password prompts appear. The helper exits when Iruka closes.
 - Repository configuration editor.
-- Multilingual interface (English, Spanish, Russian and Japanese) with an
-  in-app language switcher.
+- Multilingual interface (English, Spanish, Russian, Japanese and Hungarian)
+  with an in-app language switcher.
 
 ## Prerequisites
 
@@ -62,7 +62,7 @@ keep in mind:
   `msgfmt`/`xgettext`/`msgmerge`/`msginit` to compile the `.mo` catalogs, and
   xbps-src chroots only install what is listed there. Without it the package
   ships with no translations.
-- The catalogs are installed under `/usr/share/locale/{es,ru,ja}/LC_MESSAGES/`,
+- The catalogs are installed under `/usr/share/locale/{es,ru,ja,hu}/LC_MESSAGES/`,
   which matches the `LOCALEDIR` compiled into the binary.
 - Two binaries are installed: `iruka-xbps` (GUI) and `iruka-helper` (privileged
   daemon). They must live in the same directory, because the GUI locates the

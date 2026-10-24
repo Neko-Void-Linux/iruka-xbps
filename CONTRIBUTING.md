@@ -43,7 +43,7 @@ translations:
    ```
 
 4. **To add a brand-new language:**
-   - Append the language code to `po/LINGUAS` (currently `es`, `ru`, `ja`).
+   - Append the language code to `po/LINGUAS` (currently `es`, `ru`, `ja`, `hu`).
    - Create `po/<lang>.po`, e.g. `msginit --input=po/iruka-xbps.pot --locale=<lang>`.
    - Add the language to the `Options > Language` menu in `buildMenuBar()` and
      handle its code in the saved-preference check.

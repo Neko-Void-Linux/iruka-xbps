@@ -31,13 +31,13 @@ In alignment with these traits, this graphical interface was designed to be:
 ## Internationalization (i18n)
 
 The interface is fully translatable through **gettext**. The `Options > Language`
-menu offers **English**, **Español** (`es`), **Русский** (`ru`) and
-**日本語** (`ja`), plus **System (default)**, which follows the user's system
-locale.
+menu offers **English**, **Español** (`es`), **Русский** (`ru`),
+**日本語** (`ja`) and **Magyar** (`hu`), plus **System (default)**, which
+follows the user's system locale.
 
 English is the source language (the `msgid` strings), so it needs no catalog:
 selecting it makes gettext fall back to the untranslated strings. Spanish,
-Russian and Japanese ship as compiled `.mo` catalogs.
+Russian, Japanese and Hungarian ship as compiled `.mo` catalogs.
 
 ### Language resolution priority
 
@@ -92,10 +92,11 @@ ninja -C builddir                  # full rebuild; .mo catalogs are compiled too
 
 The `Options > Language` menu is built in `buildMenuBar()` as a group of
 `GtkRadioMenuItem`s — **System (default)** (`""`), **English** (`"en"`),
-**Español** (`"es"`), **Русский** (`"ru"`) and **日本語** (`"ja"`) — each
-carrying its language code in a `"lang"` data field. The active entry is set
-from the saved `ui_language` preference. English maps to `"en"` and works
-without a catalog: gettext falls back to the `msgid` strings.
+**Español** (`"es"`), **Русский** (`"ru"`), **日本語** (`"ja"`) and
+**Magyar** (`"hu"`) — each carrying its language code in a `"lang"` data field.
+The active entry is set from the saved `ui_language` preference. English maps
+to `"en"` and works without a catalog: gettext falls back to the `msgid`
+strings.
 
 Two details matter when touching this code:
 

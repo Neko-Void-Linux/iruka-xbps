@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: iruka-xbps\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-23 21:08-0400\n"
+"POT-Creation-Date: 2026-10-23 21:48-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -81,7 +81,7 @@ msgstr ""
 msgid "View"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:74 src/gui/main_window_ui.cpp:323
+#: src/gui/main_window_ui.cpp:74 src/gui/main_window_ui.cpp:333
 msgid "All packages"
 msgstr ""
 
@@ -89,7 +89,7 @@ msgstr ""
 msgid "Installed only"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:82 src/gui/main_window_ui.cpp:325
+#: src/gui/main_window_ui.cpp:82 src/gui/main_window_ui.cpp:335
 msgid "Not installed"
 msgstr ""
 
@@ -109,11 +109,11 @@ msgstr ""
 msgid "Mark for uninstall"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:107 src/gui/main_window_ui.cpp:397
+#: src/gui/main_window_ui.cpp:107 src/gui/main_window_ui.cpp:407
 msgid "Unmark"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:113 src/gui/main_window_ui.cpp:243
+#: src/gui/main_window_ui.cpp:113 src/gui/main_window_ui.cpp:253
 msgid "Apply"
 msgstr ""
 
@@ -161,95 +161,99 @@ msgstr ""
 msgid "日本語"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:205
+#: src/gui/main_window_ui.cpp:175
+msgid "Magyar"
+msgstr ""
+
+#: src/gui/main_window_ui.cpp:215
 msgid "Help"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:208
+#: src/gui/main_window_ui.cpp:218
 msgid "About"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:235
+#: src/gui/main_window_ui.cpp:245
 msgid "Update"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:237
+#: src/gui/main_window_ui.cpp:247
 msgid "Upgrade all system packages"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:239
+#: src/gui/main_window_ui.cpp:249
 msgid "Refresh"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:241
+#: src/gui/main_window_ui.cpp:251
 msgid "Refresh package list"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:245
+#: src/gui/main_window_ui.cpp:255
 msgid "Apply pending transaction"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:286
+#: src/gui/main_window_ui.cpp:296
 msgid "Name"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:294
+#: src/gui/main_window_ui.cpp:304
 msgid "Version"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:302
+#: src/gui/main_window_ui.cpp:312
 msgid "Description"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:324
+#: src/gui/main_window_ui.cpp:334
 msgid "Installed"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:326
+#: src/gui/main_window_ui.cpp:336
 msgid "Outdated"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:328
+#: src/gui/main_window_ui.cpp:338
 msgid "Categories"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:387
+#: src/gui/main_window_ui.cpp:397
 msgid "Install"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:391
+#: src/gui/main_window_ui.cpp:401
 msgid "Remove"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:423
+#: src/gui/main_window_ui.cpp:433
 msgid "Info"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:438
+#: src/gui/main_window_ui.cpp:448
 msgid "Files"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:454
+#: src/gui/main_window_ui.cpp:464
 msgid "Size"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:461
+#: src/gui/main_window_ui.cpp:471
 msgid "Op"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:463
+#: src/gui/main_window_ui.cpp:473
 msgid "Package"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:475
+#: src/gui/main_window_ui.cpp:485
 msgid "Transaction"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:509
+#: src/gui/main_window_ui.cpp:519
 msgid "Show details"
 msgstr ""
 
-#: src/gui/main_window_ui.cpp:529 src/gui/main_window_exec.cpp:22
+#: src/gui/main_window_ui.cpp:539 src/gui/main_window_exec.cpp:22
 #: src/gui/repository_editor.cpp:151
 msgid "Cancel"
 msgstr ""
