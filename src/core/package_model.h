@@ -20,7 +20,8 @@ public:
 
   PackageModel(const PackageRepository &repo);
 
-  void applyFilter(ViewOption view, const std::string &repo = "");
+  void applyFilter(ViewOption view, const std::string &repo = "",
+                   const std::string &category = "");
   void applyFilter(const std::string &filterText, int filterColumn = -1);
 
   int rowCount() const { return static_cast<int>(m_filtered.size()); }

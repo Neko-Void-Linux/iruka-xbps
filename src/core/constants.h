@@ -7,7 +7,6 @@ constexpr const char* IRUKA_APP_NAME    = "Iruka-xbps";
 constexpr const char* IRUKA_APP_VERSION = "0.1.0";
 constexpr const char* IRUKA_APP_TITLE   = "Iruka-xbps Package Manager";
 
-// gettext text domain for the message catalogs installed under LOCALEDIR.
 constexpr const char* IRUKA_TEXTDOMAIN  = "iruka-xbps";
 
 constexpr const char* IRUKA_CONFIG_DIR_NAME  = ".config/iruka-xbps";
@@ -34,6 +33,7 @@ enum class ViewOption {
   All,
   Installed,
   NotInstalled,
+  Outdated,
 };
 
 enum class CommandExecuting {

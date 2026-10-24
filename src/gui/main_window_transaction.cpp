@@ -1,20 +1,11 @@
-// ----------------------------------------------------------------------------
-// main_window_transaction.cpp — Transaction management for MainWindow
-//
-// Contains:
-//   - addToTransaction()   marks a package for install or removal
-//   - setPackageStatus()   updates the status column in the list store
-//   - commitTransaction()  confirms and runs the pending transaction
-//   - clearTransaction()   resets all pending marks and the transaction tab
-// ----------------------------------------------------------------------------
 
 #include "main_window_private.h"
 #include "constants.h"
 #include "i18n.h"
 #include <string>
 #include <vector>
+#include <algorithm>
 
-// Adds a package to the pending install or remove transaction list.
 void MainWindow::addToTransaction(const std::string &pkgName, bool install) {
     if (install) {
         m_transactionInstall.push_back(pkgName);
@@ -24,7 +15,6 @@ void MainWindow::addToTransaction(const std::string &pkgName, bool install) {
         m_removeMarks.insert(pkgName);
     }
 
-    // Append the operation to the Transaction notebook tab.
     GtkTreeIter iter;
     gtk_list_store_append(m_transStore, &iter);
     gtk_list_store_set(m_transStore, &iter,
@@ -32,12 +22,51 @@ void MainWindow::addToTransaction(const std::string &pkgName, bool install) {
         1, pkgName.c_str(),
         -1);
 
-    // Reflect the new status immediately in the main package list.
     setPackageStatus(pkgName, install ? "I" : "X");
 }
 
-// Scans the list store to find the row for the given package and updates its status column.
-// NOTE: This is O(n) – consider replacing with a row-reference map for large lists.
+void MainWindow::do_unmark() {
+    GtkTreeIter   iter;
+    GtkTreeModel *model = GTK_TREE_MODEL(m_listStore);
+    if (!gtk_tree_selection_get_selected(m_selection, &model, &iter)) return;
+
+    gpointer ptr = nullptr;
+    gtk_tree_model_get(model, &iter, COL_PKG_PTR, &ptr, -1);
+    if (!ptr) return;
+
+    auto *pkg = static_cast<PackageRepository::PackageData*>(ptr);
+    const std::string name = pkg->name;
+
+    bool changed = false;
+    auto eraseFrom = [&](std::vector<std::string> &v) {
+        auto it = std::find(v.begin(), v.end(), name);
+        if (it != v.end()) { v.erase(it); changed = true; }
+    };
+    eraseFrom(m_transactionInstall);
+    eraseFrom(m_transactionRemove);
+    if (m_installMarks.erase(name) > 0) changed = true;
+    if (m_removeMarks.erase(name) > 0) changed = true;
+    if (!changed) return;
+
+    GtkTreeModel *tm = GTK_TREE_MODEL(m_transStore);
+    GtkTreeIter   ti;
+    gboolean valid = gtk_tree_model_get_iter_first(tm, &ti);
+    while (valid) {
+        gchar *rowName = nullptr;
+        gtk_tree_model_get(tm, &ti, 1, &rowName, -1);
+        if (rowName && name == rowName) {
+            g_free(rowName);
+            valid = gtk_list_store_remove(m_transStore, &ti);
+        } else {
+            g_free(rowName);
+            valid = gtk_tree_model_iter_next(tm, &ti);
+        }
+    }
+
+    std::string status = pkg->outdated() ? "!" : (pkg->installed() ? "@" : " ");
+    setPackageStatus(name, status);
+}
+
 void MainWindow::setPackageStatus(const std::string &pkgName,
                                   const std::string &status) {
     GtkTreeModel *model = GTK_TREE_MODEL(m_listStore);
@@ -56,7 +85,6 @@ void MainWindow::setPackageStatus(const std::string &pkgName,
     }
 }
 
-// Prompts for confirmation, then runs the queued install/remove commands.
 void MainWindow::commitTransaction() {
     if (m_transactionRunning) return;
 
@@ -69,7 +97,6 @@ void MainWindow::commitTransaction() {
         return;
     }
 
-    // Build the confirmation message listing all packages to be processed.
     std::string msg = std::string(_("Execute transaction?")) + "\n\n";
     if (!m_transactionInstall.empty()) {
         msg += _("Install: ");
@@ -92,7 +119,6 @@ void MainWindow::commitTransaction() {
     }
     gtk_widget_destroy(dialog);
 
-    // Build the command queue: install first, then remove.
     m_commandQueue.clear();
     if (!m_transactionInstall.empty()) {
         std::vector<std::string> installArgs = { XBPS_INSTALL_BIN, "-y" };
@@ -105,12 +131,10 @@ void MainWindow::commitTransaction() {
         m_commandQueue.push_back({ removeArgs, _("Removing packages...") });
     }
 
-    // Clear marks before running so the UI resets cleanly.
     clearTransaction();
     runCommandQueue();
 }
 
-// Clears all pending install/remove marks and resets the transaction list.
 void MainWindow::clearTransaction() {
     m_transactionInstall.clear();
     m_transactionRemove.clear();

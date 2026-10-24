@@ -2,12 +2,10 @@
 #include <algorithm>
 #include <cctype>
 
-// Constructs a PackageModel bound to the given PackageRepository.
 PackageModel::PackageModel(const PackageRepository &repo) : m_repo(repo) {}
 
-// Filters the package list by install status and optional repository name.
-// This must be called before the text-filter overload.
-void PackageModel::applyFilter(ViewOption view, const std::string &repo) {
+void PackageModel::applyFilter(ViewOption view, const std::string &repo,
+                               const std::string &category) {
   m_filtered.clear();
   m_installedCount = 0;
 
@@ -22,6 +20,9 @@ void PackageModel::applyFilter(ViewOption view, const std::string &repo) {
       case ViewOption::NotInstalled:
         match = !pkg->installed();
         break;
+      case ViewOption::Outdated:
+        match = pkg->outdated();
+        break;
       case ViewOption::All:
       default:
         break;
@@ -31,12 +32,14 @@ void PackageModel::applyFilter(ViewOption view, const std::string &repo) {
       match = (pkg->repository == repo);
     }
 
+    if (match && !category.empty()) {
+      match = (pkg->category == category);
+    }
+
     if (match) m_filtered.push_back(pkg);
   }
 }
 
-// Further filters the current m_filtered list by a case-insensitive text search.
-// Searches package name, version, and description. Must be called after the view filter.
 void PackageModel::applyFilter(const std::string &filterText, int filterColumn) {
   if (filterText.empty()) {
     applyFilter(ViewOption::All);
@@ -74,13 +77,11 @@ void PackageModel::applyFilter(const std::string &filterText, int filterColumn) 
   m_filtered = std::move(filtered);
 }
 
-// Returns the PackageData for the given row index, or nullptr if out of bounds.
 const PackageRepository::PackageData* PackageModel::getData(int row) const {
   if (row < 0 || row >= static_cast<int>(m_filtered.size())) return nullptr;
   return m_filtered[row];
 }
 
-// Returns the row index of the given package pointer in the filtered list, or -1 if not found.
 int PackageModel::rowOfPackage(const PackageRepository::PackageData *pkg) const {
   for (size_t i = 0; i < m_filtered.size(); ++i) {
     if (m_filtered[i] == pkg) return static_cast<int>(i);
@@ -88,7 +89,6 @@ int PackageModel::rowOfPackage(const PackageRepository::PackageData *pkg) const 
   return -1;
 }
 
-// Sorts the filtered list by the given column in ascending or descending order.
 void PackageModel::sort(int column, bool ascending) {
   auto cmp = [column, ascending](const PackageRepository::PackageData *a,
                                   const PackageRepository::PackageData *b) -> bool {
@@ -122,13 +122,11 @@ void PackageModel::sort(int column, bool ascending) {
   std::sort(m_filtered.begin(), m_filtered.end(), cmp);
 }
 
-// Clears the filtered list and resets the installed count to zero.
 void PackageModel::clear() {
   m_filtered.clear();
   m_installedCount = 0;
 }
 
-// Returns the short column identifier string (e.g., "S", "Name").
 std::string PackageModel::getColumnName(int col) {
   switch (col) {
     case ColStatus:     return "S";
@@ -140,7 +138,6 @@ std::string PackageModel::getColumnName(int col) {
   }
 }
 
-// Returns the display header string for the given column.
 std::string PackageModel::getColumnHeader(int col) {
   return getColumnName(col);
 }

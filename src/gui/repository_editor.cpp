@@ -1,6 +1,7 @@
 #include "repository_editor.h"
 #include "constants.h"
 #include "i18n.h"
+#include "privileged_daemon.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -40,7 +41,7 @@ std::string fileNameFromText(const std::string &text) {
   return name;
 }
 
-} // namespace
+}
 
 RepositoryEditor::RepositoryEditor(GtkWidget *parent)
   : m_parent(parent), m_window(nullptr), m_notebook(nullptr) {
@@ -222,24 +223,18 @@ void RepositoryEditor::deleteRepository() {
   }
   gtk_widget_destroy(dialog);
 
-  std::string full = std::string(PKEXEC_BIN) + " rm -f " +
-                     std::string(REPO_DIR) + "/" + fileName + " 2>&1";
+  std::string cmd = "rm -f " + std::string(REPO_DIR) + "/" + fileName;
 
   auto *result = new DeleteResult();
   result->editor = this;
   result->page = page;
 
-  std::thread([result, full](){
+  std::thread([result, cmd](){
     std::string output;
-    FILE *pipe = popen(full.c_str(), "r");
-    int status = 0;
-    if (pipe) {
-      char buf[4096];
-      while (fgets(buf, sizeof(buf), pipe)) output += buf;
-      status = pclose(pipe);
-    }
+    int code = PrivilegedDaemon::instance().run(cmd,
+        [&output](const std::string &t){ output += t; });
     result->output = output;
-    result->success = (status == 0);
+    result->success = (code == 0);
     g_idle_add(delete_done_cb, result);
   }).detach();
 }
@@ -296,22 +291,15 @@ void RepositoryEditor::saveAll() {
   }
   if (command.size() >= 4) command.erase(command.size() - 4);
 
-  std::string full = std::string(PKEXEC_BIN) + " sh -c '" + command + "' 2>&1";
-
   auto *result = new SaveResult();
   result->editor = this;
 
-  std::thread([result, full](){
+  std::thread([result, command](){
     std::string output;
-    FILE *pipe = popen(full.c_str(), "r");
-    int status = 0;
-    if (pipe) {
-      char buf[4096];
-      while (fgets(buf, sizeof(buf), pipe)) output += buf;
-      status = pclose(pipe);
-    }
+    int code = PrivilegedDaemon::instance().run(command,
+        [&output](const std::string &t){ output += t; });
     result->output = output;
-    result->success = (status == 0);
+    result->success = (code == 0);
     g_idle_add(save_done_cb, result);
   }).detach();
 }

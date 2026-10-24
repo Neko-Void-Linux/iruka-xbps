@@ -25,8 +25,10 @@ sources = files(
   'src/core/xbps_command.cpp',
   'src/core/package_repository.cpp',
   'src/core/package_model.cpp',
+  'src/core/category.cpp',
   'src/core/settings.cpp',
   'src/core/utils.cpp',
+  'src/core/privileged_daemon.cpp',
   'src/gui/theme.cpp',
   'src/gui/main_window.cpp',
   'src/gui/main_window_callbacks.cpp',
@@ -42,6 +44,13 @@ executable('iruka-xbps',
   sources,
   include_directories: [core_inc, gui_inc],
   dependencies: [gtk_dep, threads_dep],
+  install: true,
+)
+
+# Privileged helper daemon, launched once by the GUI through pkexec.
+executable('iruka-helper',
+  files('src/helper/main.cpp'),
+  include_directories: [core_inc],
   install: true,
 )
 

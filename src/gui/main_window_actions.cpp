@@ -1,19 +1,3 @@
-// ----------------------------------------------------------------------------
-// main_window_actions.cpp — User-triggered actions for MainWindow
-//
-// Contains the high-level action handlers invoked by menu items and toolbar
-// buttons. Each action either modifies the view state, queues an xbps command,
-// or opens a dialog.
-//
-// Actions:
-//   - setView()           changes the active package filter
-//   - do_sync()           queues a database sync
-//   - do_upgrade()        queues a full system upgrade
-//   - do_install()        queues the selected package for installation
-//   - do_remove()         queues the selected package for removal
-//   - openRepositories()  opens the repository editor
-//   - do_about()          shows the About dialog
-// ----------------------------------------------------------------------------
 
 #include "main_window_private.h"
 #include "package.h"
@@ -26,20 +10,32 @@
 #include "i18n.h"
 #include <mutex>
 
-// Changes the active view filter and refreshes the table.
 void MainWindow::setView(ViewOption v) {
     Settings::instance().setViewOption(v);
+    m_selectedCategory.clear();
 
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_model->applyFilter(v);
-        m_model->sort(PackageModel::ColName, true);
+    if (m_categoryList) {
+        int index = 0;
+        switch (v) {
+            case ViewOption::Installed:    index = 1; break;
+            case ViewOption::NotInstalled: index = 2; break;
+            case ViewOption::Outdated:     index = 3; break;
+            default:                       index = 0; break;
+        }
+        GtkListBoxRow *row = gtk_list_box_get_row_at_index(
+            GTK_LIST_BOX(m_categoryList), index);
+        if (row) {
+            g_signal_handlers_block_by_func(m_categoryList,
+                (gpointer)G_CALLBACK(cb_category_selected), this);
+            gtk_list_box_select_row(GTK_LIST_BOX(m_categoryList), row);
+            g_signal_handlers_unblock_by_func(m_categoryList,
+                (gpointer)G_CALLBACK(cb_category_selected), this);
+        }
     }
-    populateTable();
-    refreshStatusBar();
+
+    applyFilters();
 }
 
-// Queues a database sync command and runs the command queue.
 void MainWindow::do_sync() {
     if (m_transactionRunning) return;
     m_commandQueue.clear();
@@ -47,7 +43,6 @@ void MainWindow::do_sync() {
     runCommandQueue();
 }
 
-// Queues a full system upgrade command and runs the command queue.
 void MainWindow::do_upgrade() {
     if (m_transactionRunning) return;
     m_commandQueue.clear();
@@ -55,7 +50,6 @@ void MainWindow::do_upgrade() {
     runCommandQueue();
 }
 
-// Adds the selected package to the install transaction.
 void MainWindow::do_install() {
     GtkTreeIter  iter;
     GtkTreeModel *model = GTK_TREE_MODEL(m_listStore);
@@ -84,7 +78,6 @@ void MainWindow::do_install() {
     addToTransaction(pkg->name, true);
 }
 
-// Validates and adds the selected package to the remove transaction.
 void MainWindow::do_remove() {
     GtkTreeIter  iter;
     GtkTreeModel *model = GTK_TREE_MODEL(m_listStore);
@@ -121,20 +114,15 @@ void MainWindow::do_remove() {
     addToTransaction(pkg->name, false);
 }
 
-// Opens the repository editor window (creates it lazily on first call).
 void MainWindow::openRepositories() {
     if (!m_repoEditor) m_repoEditor = new RepositoryEditor(m_window);
     m_repoEditor->show();
 }
 
-// Shows the About dialog.
 void MainWindow::do_about() {
     GtkWidget *dialog = gtk_about_dialog_new();
     gtk_about_dialog_set_program_name(GTK_ABOUT_DIALOG(dialog), IRUKA_APP_NAME);
-    gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(dialog), IRUKA_APP_VERSION);
 
-    // Use the logo embedded in the binary so the dialog works even without an
-    // installed icon theme.
     GdkPixbuf *logo = logo_pixbuf();
     if (logo) {
         gtk_about_dialog_set_logo(GTK_ABOUT_DIALOG(dialog), logo);
@@ -156,8 +144,6 @@ void MainWindow::do_about() {
     gtk_widget_show(dialog);
 }
 
-// Persists the chosen UI language and rebuilds the interface so the change is
-// applied immediately, without restarting the process.
 void MainWindow::setLanguage(const std::string &lang) {
     if (m_transactionRunning) {
         GtkWidget *dialog = gtk_message_dialog_new(GTK_WINDOW(m_window),
@@ -168,13 +154,9 @@ void MainWindow::setLanguage(const std::string &lang) {
         return;
     }
 
-    // Update the LANGUAGE environment variable so gettext picks the right
-    // catalog, then rebind the text domain to flush any cached lookup.
     if (!lang.empty()) {
         setenv("LANGUAGE", lang.c_str(), 1);
     } else {
-        // Empty lang means "system default"; unset LANGUAGE to fall back to the
-        // system locale (LC_ALL/LC_MESSAGES/LANG).
         unsetenv("LANGUAGE");
     }
     bindtextdomain(IRUKA_TEXTDOMAIN, utils::resolveLocaledir().c_str());
@@ -184,9 +166,6 @@ void MainWindow::setLanguage(const std::string &lang) {
     Settings::instance().setUiLanguage(lang);
     Settings::instance().save();
 
-    // Defer the UI rebuild until the language menu has fully closed; rebuilding
-    // from inside the menu's own signal handler would destroy widgets that GTK
-    // is still processing.
     auto *data = new ReloadData();
     data->win = this;
     g_idle_add(reload_ui_cb, data);

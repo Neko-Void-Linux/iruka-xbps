@@ -11,8 +11,6 @@ public:
   ~RepositoryEditor();
 
   void show();
-  // Destroys the editor window (used when the main UI is rebuilt on a language
-  // change). The object is still valid but should be deleted by the owner.
   void close();
 
 private:

@@ -1,20 +1,11 @@
-// ----------------------------------------------------------------------------
-// main_window_ui.cpp — Widget construction for MainWindow
-//
-// Contains all buildXxx() methods that construct the GTK widget hierarchy,
-// plus toggleDetails() which manipulates the pane layout at runtime.
-// ----------------------------------------------------------------------------
 
 #include "main_window_private.h"
 #include "settings.h"
 #include "constants.h"
+#include "category.h"
 #include "i18n.h"
 
-// ============================================================================
-// Top-level layout assembly
-// ============================================================================
 
-// Assembles all UI sections into the top-level window layout.
 void MainWindow::buildUi() {
     m_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(m_window), _(IRUKA_APP_TITLE));
@@ -30,18 +21,15 @@ void MainWindow::buildUi() {
     buildToolbar();
     buildSearchBar();
     buildPackageTable();
+    buildCategoryPanel();
     buildInfoPanel();
     buildStatusBar();
     buildProgressDialog();
 
-    // All rows share the same horizontal margin (8px) so the menu bar, search
-    // row, package list and status bar are perfectly aligned on the left and
-    // right edges (visible when the window is maximized or fullscreen).
     gtk_widget_set_margin_start(m_menuBar, 8);
     gtk_widget_set_margin_end(m_menuBar, 8);
     gtk_box_pack_start(GTK_BOX(vbox), m_menuBar, FALSE, FALSE, 0);
 
-    // Top row: search bar on the left, toolbar buttons on the right.
     GtkWidget *topRow = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
     gtk_widget_set_margin_start(topRow, 8);
     gtk_widget_set_margin_end(topRow, 8);
@@ -49,23 +37,24 @@ void MainWindow::buildUi() {
     gtk_box_pack_start(GTK_BOX(topRow), m_searchBar, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(topRow), m_toolbar, FALSE, FALSE, 0);
 
-    // Vertical pane: package list on top, details notebook on bottom.
     m_mainPaned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
-    gtk_widget_set_margin_start(m_mainPaned, 8);
-    gtk_widget_set_margin_end(m_mainPaned, 8);
-    gtk_widget_set_margin_bottom(m_mainPaned, 4);
 
     GtkWidget *listScroll = gtk_scrolled_window_new(nullptr, nullptr);
     gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(listScroll),
         GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-    // No border/shadow, matching the notebook tabs below, so the list visually
-    // aligns with the search bar and menu bar edges.
     gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(listScroll), GTK_SHADOW_NONE);
     gtk_container_add(GTK_CONTAINER(listScroll), m_treeView);
 
     gtk_paned_pack1(GTK_PANED(m_mainPaned), listScroll, TRUE, TRUE);
     gtk_paned_pack2(GTK_PANED(m_mainPaned), m_notebook, TRUE, TRUE);
-    gtk_box_pack_start(GTK_BOX(vbox), m_mainPaned, TRUE, TRUE, 0);
+
+    m_outerPaned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_widget_set_margin_start(m_outerPaned, 8);
+    gtk_widget_set_margin_end(m_outerPaned, 8);
+    gtk_widget_set_margin_bottom(m_outerPaned, 4);
+    gtk_paned_pack1(GTK_PANED(m_outerPaned), m_categoryScroll, FALSE, FALSE);
+    gtk_paned_pack2(GTK_PANED(m_outerPaned), m_mainPaned, TRUE, TRUE);
+    gtk_box_pack_start(GTK_BOX(vbox), m_outerPaned, TRUE, TRUE, 0);
 
     gtk_widget_set_margin_start(m_statusbar, 8);
     gtk_widget_set_margin_end(m_statusbar, 8);
@@ -74,15 +63,10 @@ void MainWindow::buildUi() {
     gtk_box_pack_start(GTK_BOX(vbox), m_statusbar, FALSE, FALSE, 0);
 }
 
-// ============================================================================
-// Menu bar
-// ============================================================================
 
-// Creates the View / Transaction / Options / Help menu bar.
 void MainWindow::buildMenuBar() {
     m_menuBar = gtk_menu_bar_new();
 
-    // --- View menu ---
     GtkWidget *viewMenu = gtk_menu_new();
     GtkWidget *viewItem = gtk_menu_item_new_with_label(_("View"));
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(viewItem), viewMenu);
@@ -108,10 +92,33 @@ void MainWindow::buildMenuBar() {
 
     gtk_menu_shell_append(GTK_MENU_SHELL(GTK_MENU_BAR(m_menuBar)), viewItem);
 
-    // --- Transaction menu ---
     GtkWidget *txMenu = gtk_menu_new();
-    GtkWidget *txItem = gtk_menu_item_new_with_label(_("Transaction"));
+    GtkWidget *txItem = gtk_menu_item_new_with_label(_("Packages"));
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(txItem), txMenu);
+
+    GtkWidget *markInstallItem = gtk_menu_item_new_with_label(_("Mark for install"));
+    g_signal_connect(markInstallItem, "activate", G_CALLBACK(cb_popup_install), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), markInstallItem);
+
+    GtkWidget *markUninstallItem = gtk_menu_item_new_with_label(_("Mark for uninstall"));
+    g_signal_connect(markUninstallItem, "activate", G_CALLBACK(cb_popup_remove), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), markUninstallItem);
+
+    GtkWidget *unmarkItem = gtk_menu_item_new_with_label(_("Unmark"));
+    g_signal_connect(unmarkItem, "activate", G_CALLBACK(cb_popup_unmark), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), unmarkItem);
+
+    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), gtk_separator_menu_item_new());
+
+    GtkWidget *commitItem = gtk_menu_item_new_with_label(_("Apply"));
+    g_signal_connect(commitItem, "activate", G_CALLBACK(cb_menu_commit), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), commitItem);
+
+    GtkWidget *clearItem = gtk_menu_item_new_with_label(_("Clear actions"));
+    g_signal_connect(clearItem, "activate", G_CALLBACK(cb_menu_clear), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), clearItem);
+
+    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), gtk_separator_menu_item_new());
 
     GtkWidget *syncItem = gtk_menu_item_new_with_label(_("Sync databases"));
     g_signal_connect(syncItem, "activate", G_CALLBACK(cb_menu_sync), this);
@@ -121,19 +128,8 @@ void MainWindow::buildMenuBar() {
     g_signal_connect(upItem, "activate", G_CALLBACK(cb_menu_upgrade), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), upItem);
 
-    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), gtk_separator_menu_item_new());
-
-    GtkWidget *commitItem = gtk_menu_item_new_with_label(_("Apply"));
-    g_signal_connect(commitItem, "activate", G_CALLBACK(cb_menu_commit), this);
-    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), commitItem);
-
-    GtkWidget *clearItem = gtk_menu_item_new_with_label(_("Clear transaction"));
-    g_signal_connect(clearItem, "activate", G_CALLBACK(cb_menu_clear), this);
-    gtk_menu_shell_append(GTK_MENU_SHELL(txMenu), clearItem);
-
     gtk_menu_shell_append(GTK_MENU_SHELL(GTK_MENU_BAR(m_menuBar)), txItem);
 
-    // --- Options menu ---
     GtkWidget *optMenu = gtk_menu_new();
     GtkWidget *optItem = gtk_menu_item_new_with_label(_("Options"));
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(optItem), optMenu);
@@ -142,7 +138,6 @@ void MainWindow::buildMenuBar() {
     g_signal_connect(reposItem, "activate", G_CALLBACK(cb_menu_repositories), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(optMenu), reposItem);
 
-    // --- Options > Language submenu ---
     GtkWidget *langMenu = gtk_menu_new();
     GtkWidget *langItem = gtk_menu_item_new_with_label(_("Language"));
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(langItem), langMenu);
@@ -170,14 +165,18 @@ void MainWindow::buildMenuBar() {
     g_signal_connect(langRu, "activate", G_CALLBACK(cb_menu_language), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(langMenu), langRu);
 
-    // Select the entry matching the saved preference (defaults to system locale).
-    // IMPORTANT: Block signals while setting the initial state to prevent triggering
-    // cb_menu_language and causing a boot loop on startup/reload.
+    GtkWidget *langJa = gtk_radio_menu_item_new_with_label(
+        gtk_radio_menu_item_get_group(GTK_RADIO_MENU_ITEM(langSystem)), _("日本語"));
+    g_object_set_data_full(G_OBJECT(langJa), "lang", g_strdup("ja"), g_free);
+    g_signal_connect(langJa, "activate", G_CALLBACK(cb_menu_language), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(langMenu), langJa);
+
     const std::string &uiLang = Settings::instance().uiLanguage();
     g_signal_handlers_block_by_func(langSystem, (gpointer)G_CALLBACK(cb_menu_language), this);
     g_signal_handlers_block_by_func(langEn, (gpointer)G_CALLBACK(cb_menu_language), this);
     g_signal_handlers_block_by_func(langEs, (gpointer)G_CALLBACK(cb_menu_language), this);
     g_signal_handlers_block_by_func(langRu, (gpointer)G_CALLBACK(cb_menu_language), this);
+    g_signal_handlers_block_by_func(langJa, (gpointer)G_CALLBACK(cb_menu_language), this);
 
     if (uiLang == "en") {
         gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(langEn), TRUE);
@@ -185,22 +184,23 @@ void MainWindow::buildMenuBar() {
         gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(langEs), TRUE);
     } else if (uiLang == "ru") {
         gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(langRu), TRUE);
+    } else if (uiLang == "ja") {
+        gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(langJa), TRUE);
     } else {
         gtk_check_menu_item_set_active(GTK_CHECK_MENU_ITEM(langSystem), TRUE);
     }
 
-    // Unblock signals after setting the initial state.
     g_signal_handlers_unblock_by_func(langSystem, (gpointer)G_CALLBACK(cb_menu_language), this);
     g_signal_handlers_unblock_by_func(langEn, (gpointer)G_CALLBACK(cb_menu_language), this);
     g_signal_handlers_unblock_by_func(langEs, (gpointer)G_CALLBACK(cb_menu_language), this);
     g_signal_handlers_unblock_by_func(langRu, (gpointer)G_CALLBACK(cb_menu_language), this);
+    g_signal_handlers_unblock_by_func(langJa, (gpointer)G_CALLBACK(cb_menu_language), this);
 
     gtk_menu_shell_append(GTK_MENU_SHELL(optMenu), gtk_separator_menu_item_new());
     gtk_menu_shell_append(GTK_MENU_SHELL(optMenu), langItem);
 
     gtk_menu_shell_append(GTK_MENU_SHELL(GTK_MENU_BAR(m_menuBar)), optItem);
 
-    // --- Help menu ---
     GtkWidget *helpMenu = gtk_menu_new();
     GtkWidget *helpItem = gtk_menu_item_new_with_label(_("Help"));
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(helpItem), helpMenu);
@@ -212,44 +212,44 @@ void MainWindow::buildMenuBar() {
     gtk_menu_shell_append(GTK_MENU_SHELL(GTK_MENU_BAR(m_menuBar)), helpItem);
 }
 
-// ============================================================================
-// Toolbar
-// ============================================================================
 
-// Creates the Sync / Update / Refresh / Apply toolbar buttons.
 void MainWindow::buildToolbar() {
     m_toolbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     gtk_widget_set_margin_top(m_toolbar, 4);
     gtk_widget_set_margin_bottom(m_toolbar, 4);
     gtk_widget_set_margin_start(m_toolbar, 8);
 
-    m_btnSync = gtk_button_new_with_label(_("Sync"));
-    gtk_widget_set_tooltip_text(m_btnSync, _("Synchronize package databases"));
-    g_signal_connect(m_btnSync, "clicked", G_CALLBACK(cb_btn_sync), this);
+    auto makeButton = [](const char *icon, const char *label,
+                         GCallback cb, gpointer data) -> GtkWidget* {
+        GtkWidget *btn = gtk_button_new();
+        GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+        GtkWidget *img = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
+        GtkWidget *lbl = gtk_label_new(label);
+        gtk_box_pack_start(GTK_BOX(box), img, FALSE, FALSE, 0);
+        gtk_box_pack_start(GTK_BOX(box), lbl, FALSE, FALSE, 0);
+        gtk_container_add(GTK_CONTAINER(btn), box);
+        g_signal_connect(btn, "clicked", cb, data);
+        return btn;
+    };
 
-    m_btnUpgrade = gtk_button_new_with_label(_("Update"));
+    m_btnUpgrade = makeButton("software-update-available-symbolic", _("Update"),
+                              G_CALLBACK(cb_btn_upgrade), this);
     gtk_widget_set_tooltip_text(m_btnUpgrade, _("Upgrade all system packages"));
-    g_signal_connect(m_btnUpgrade, "clicked", G_CALLBACK(cb_btn_upgrade), this);
 
-    m_btnRefresh = gtk_button_new_with_label(_("Refresh"));
+    m_btnRefresh = makeButton("view-refresh-symbolic", _("Refresh"),
+                              G_CALLBACK(cb_btn_refresh), this);
     gtk_widget_set_tooltip_text(m_btnRefresh, _("Refresh package list"));
-    g_signal_connect(m_btnRefresh, "clicked", G_CALLBACK(cb_btn_refresh), this);
 
-    m_btnApply = gtk_button_new_with_label(_("Apply"));
+    m_btnApply = makeButton("object-select-symbolic", _("Apply"),
+                            G_CALLBACK(cb_btn_apply), this);
     gtk_widget_set_tooltip_text(m_btnApply, _("Apply pending transaction"));
-    g_signal_connect(m_btnApply, "clicked", G_CALLBACK(cb_btn_apply), this);
 
-    gtk_box_pack_start(GTK_BOX(m_toolbar), m_btnSync,    FALSE, FALSE, 4);
     gtk_box_pack_start(GTK_BOX(m_toolbar), m_btnUpgrade, FALSE, FALSE, 4);
     gtk_box_pack_start(GTK_BOX(m_toolbar), m_btnRefresh, FALSE, FALSE, 4);
     gtk_box_pack_start(GTK_BOX(m_toolbar), m_btnApply,   FALSE, FALSE, 4);
 }
 
-// ============================================================================
-// Search bar
-// ============================================================================
 
-// Creates the search entry with a 300ms debounce on changes.
 void MainWindow::buildSearchBar() {
     m_searchBar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_widget_set_margin_top(m_searchBar, 4);
@@ -261,22 +261,17 @@ void MainWindow::buildSearchBar() {
     gtk_box_pack_start(GTK_BOX(m_searchBar), m_searchEntry, TRUE, TRUE, 5);
 }
 
-// ============================================================================
-// Package table
-// ============================================================================
 
-// Creates the GtkTreeView package list and connects selection/click signals.
 void MainWindow::buildPackageTable() {
     m_listStore = gtk_list_store_new(COL_COUNT,
-        G_TYPE_STRING,  // COL_STATUS
-        G_TYPE_STRING,  // COL_NAME
-        G_TYPE_STRING,  // COL_VERSION
-        G_TYPE_STRING,  // COL_DESCRIPTION
-        G_TYPE_POINTER  // COL_PKG_PTR
+        G_TYPE_STRING,
+        G_TYPE_STRING,
+        G_TYPE_STRING,
+        G_TYPE_STRING,
+        G_TYPE_POINTER
     );
 
     m_treeView = gtk_tree_view_new_with_model(GTK_TREE_MODEL(m_listStore));
-    // The tree view now holds its own reference; release ours.
     g_object_unref(m_listStore);
 
     GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
@@ -319,7 +314,73 @@ void MainWindow::buildPackageTable() {
     buildPopupMenu();
 }
 
-// Creates the right-click context menu for Install and Remove actions.
+void MainWindow::buildCategoryPanel() {
+    m_categoryList = gtk_list_box_new();
+    gtk_list_box_set_selection_mode(GTK_LIST_BOX(m_categoryList), GTK_SELECTION_SINGLE);
+    g_signal_connect(m_categoryList, "row-selected",
+                     G_CALLBACK(cb_category_selected), this);
+
+    addCategoryRow(_("All packages"), 0, "");
+    addCategoryRow(_("Installed"), 1, "");
+    addCategoryRow(_("Not installed"), 2, "");
+    addCategoryRow(_("Outdated"), 3, "");
+
+    GtkListBoxRow *catHeader = addCategoryRow(_("Categories"), -1, "");
+    gtk_list_box_row_set_selectable(catHeader, FALSE);
+    gtk_list_box_row_set_activatable(catHeader, FALSE);
+
+    for (const auto &cat : category::all())
+        addCategoryRow(_(cat.c_str()), 5, cat);
+
+    m_categoryScroll = gtk_scrolled_window_new(nullptr, nullptr);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(m_categoryScroll),
+        GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(m_categoryScroll),
+        GTK_SHADOW_NONE);
+    gtk_widget_set_size_request(m_categoryScroll, 170, -1);
+    gtk_container_add(GTK_CONTAINER(m_categoryScroll), m_categoryList);
+
+    int index = 0;
+    switch (Settings::instance().viewOption()) {
+        case ViewOption::Installed:    index = 1; break;
+        case ViewOption::NotInstalled: index = 2; break;
+        case ViewOption::Outdated:     index = 3; break;
+        default:                       index = 0; break;
+    }
+    GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(m_categoryList), index);
+    if (row) {
+        g_signal_handlers_block_by_func(m_categoryList,
+            (gpointer)G_CALLBACK(cb_category_selected), this);
+        gtk_list_box_select_row(GTK_LIST_BOX(m_categoryList), row);
+        g_signal_handlers_unblock_by_func(m_categoryList,
+            (gpointer)G_CALLBACK(cb_category_selected), this);
+    }
+}
+
+GtkListBoxRow *MainWindow::addCategoryRow(const std::string &label, int kind,
+                                          const std::string &repo) {
+    GtkWidget *row = gtk_list_box_row_new();
+    GtkWidget *lbl = gtk_label_new(label.c_str());
+    gtk_label_set_xalign(GTK_LABEL(lbl), 0.0f);
+    gtk_label_set_ellipsize(GTK_LABEL(lbl), PANGO_ELLIPSIZE_END);
+    gtk_widget_set_margin_start(lbl, 10);
+    gtk_widget_set_margin_end(lbl, 10);
+    gtk_widget_set_margin_top(lbl, 5);
+    gtk_widget_set_margin_bottom(lbl, 5);
+    if (kind == -1) {
+        GtkStyleContext *sc = gtk_widget_get_style_context(lbl);
+        gtk_style_context_add_class(sc, "dim-label");
+    }
+    gtk_container_add(GTK_CONTAINER(row), lbl);
+
+    g_object_set_data(G_OBJECT(row), "kind", GINT_TO_POINTER(kind));
+    if (!repo.empty())
+        g_object_set_data_full(G_OBJECT(row), "value", g_strdup(repo.c_str()), g_free);
+
+    gtk_list_box_insert(GTK_LIST_BOX(m_categoryList), row, -1);
+    return GTK_LIST_BOX_ROW(row);
+}
+
 void MainWindow::buildPopupMenu() {
     m_popupMenu = gtk_menu_new();
 
@@ -331,21 +392,23 @@ void MainWindow::buildPopupMenu() {
     g_signal_connect(removeItem, "activate", G_CALLBACK(cb_popup_remove), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(m_popupMenu), removeItem);
 
+    gtk_menu_shell_append(GTK_MENU_SHELL(m_popupMenu), gtk_separator_menu_item_new());
+
+    GtkWidget *unmarkItem = gtk_menu_item_new_with_label(_("Unmark"));
+    g_signal_connect(unmarkItem, "activate", G_CALLBACK(cb_popup_unmark), this);
+    gtk_menu_shell_append(GTK_MENU_SHELL(m_popupMenu), unmarkItem);
+
     gtk_widget_show_all(m_popupMenu);
 }
 
-// ============================================================================
-// Info / Files / Transaction notebook panel
-// ============================================================================
 
-// Creates the Info / Files / Transaction notebook panel.
 void MainWindow::buildInfoPanel() {
     m_notebook = gtk_notebook_new();
     gtk_notebook_set_show_border(GTK_NOTEBOOK(m_notebook), FALSE);
 
-    // --- Info tab ---
     m_infoBuffer = gtk_text_buffer_new(nullptr);
     m_infoView   = gtk_text_view_new_with_buffer(m_infoBuffer);
+    g_object_unref(m_infoBuffer);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(m_infoView), FALSE);
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(m_infoView), GTK_WRAP_WORD);
     gtk_text_view_set_top_margin(GTK_TEXT_VIEW(m_infoView), 8);
@@ -359,9 +422,9 @@ void MainWindow::buildInfoPanel() {
     gtk_container_add(GTK_CONTAINER(infoScroll), m_infoView);
     gtk_notebook_append_page(GTK_NOTEBOOK(m_notebook), infoScroll, gtk_label_new(_("Info")));
 
-    // --- Files tab ---
     m_filesBuffer = gtk_text_buffer_new(nullptr);
     m_filesView   = gtk_text_view_new_with_buffer(m_filesBuffer);
+    g_object_unref(m_filesBuffer);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(m_filesView), FALSE);
     gtk_text_view_set_top_margin(GTK_TEXT_VIEW(m_filesView), 8);
     gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(m_filesView), 8);
@@ -374,11 +437,9 @@ void MainWindow::buildInfoPanel() {
     gtk_container_add(GTK_CONTAINER(filesScroll), m_filesView);
     gtk_notebook_append_page(GTK_NOTEBOOK(m_notebook), filesScroll, gtk_label_new(_("Files")));
 
-    // --- Size tab ---
-    // Shows the sizes of the currently selected package only (filled by the
-    // debounced selection handler; see onTableSelect / showPackageInfo).
     m_sizeBuffer = gtk_text_buffer_new(nullptr);
     m_sizeView   = gtk_text_view_new_with_buffer(m_sizeBuffer);
+    g_object_unref(m_sizeBuffer);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(m_sizeView), FALSE);
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(m_sizeView), GTK_WRAP_WORD);
     gtk_text_view_set_top_margin(GTK_TEXT_VIEW(m_sizeView), 8);
@@ -392,7 +453,6 @@ void MainWindow::buildInfoPanel() {
     gtk_container_add(GTK_CONTAINER(sizeScroll), m_sizeView);
     gtk_notebook_append_page(GTK_NOTEBOOK(m_notebook), sizeScroll, gtk_label_new(_("Size")));
 
-    // --- Transaction tab ---
     m_transStore = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
     m_transTree  = gtk_tree_view_new_with_model(GTK_TREE_MODEL(m_transStore));
     g_object_unref(m_transStore);
@@ -415,21 +475,13 @@ void MainWindow::buildInfoPanel() {
         gtk_label_new(_("Transaction")));
 }
 
-// ============================================================================
-// Status bar
-// ============================================================================
 
-// Creates the status bar that shows package counts.
 void MainWindow::buildStatusBar() {
     m_statusbar      = gtk_statusbar_new();
     m_statusContextId = gtk_statusbar_get_context_id(GTK_STATUSBAR(m_statusbar), "iruka");
 }
 
-// ============================================================================
-// Progress dialog
-// ============================================================================
 
-// Creates the modal progress dialog used during install/remove/upgrade operations.
 void MainWindow::buildProgressDialog() {
     m_progressDialog = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(m_progressDialog), _(IRUKA_APP_NAME));
@@ -464,6 +516,7 @@ void MainWindow::buildProgressDialog() {
 
     m_progressBuffer = gtk_text_buffer_new(nullptr);
     m_progressView   = gtk_text_view_new_with_buffer(m_progressBuffer);
+    g_object_unref(m_progressBuffer);
     gtk_text_view_set_editable(GTK_TEXT_VIEW(m_progressView), FALSE);
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(m_progressView), GTK_WRAP_CHAR);
     gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(m_progressView), FALSE);
@@ -479,11 +532,7 @@ void MainWindow::buildProgressDialog() {
     gtk_box_pack_start(GTK_BOX(vbox), btnBox, FALSE, FALSE, 0);
 }
 
-// ============================================================================
-// Details panel toggle
-// ============================================================================
 
-// Shows or hides the details notebook panel based on the menu checkbox state.
 void MainWindow::toggleDetails() {
     if (gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(m_viewDetailsItem))) {
         gtk_widget_show(m_notebook);

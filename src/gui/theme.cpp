@@ -3,8 +3,6 @@
 
 namespace theme {
 
-// Application-level CSS overrides. Forces flat, border-radius-free styling
-// and applies a tab underline style for the notebook widget.
 static const char *kCss =
   "* {\n"
   "  border-radius: 0;\n"
@@ -45,7 +43,6 @@ static const char *kCss =
   "  background: @theme_base_color;\n"
   "}\n";
 
-// Loads and applies the application CSS to the default GDK screen.
 void apply() {
   GtkCssProvider *provider = gtk_css_provider_new();
   gtk_css_provider_load_from_data(provider, kCss, -1, nullptr);
@@ -56,4 +53,4 @@ void apply() {
   g_object_unref(provider);
 }
 
-} // namespace theme
+}
