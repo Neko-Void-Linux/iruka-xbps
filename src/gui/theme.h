@@ -5,6 +5,6 @@ namespace theme {
 
 void apply();
 
-} // namespace theme
+}
 
 #endif

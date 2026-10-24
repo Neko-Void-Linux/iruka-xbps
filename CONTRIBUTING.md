@@ -5,7 +5,8 @@ Thank you for your interest in contributing to iruka-xbps. Please review the fol
 ## Coding Standards
 
 - Write standard C++17.
-- Document all new functions, classes, and logic in clear English.
+- Prefer clear, self-documenting code; add a comment only when the reasoning or
+  a non-obvious invariant needs explaining.
 - Avoid using public classes for UI-internal details; keep implementation details scoped to private headers (e.g., `main_window_private.h`).
 - Handle inputs and type conversions securely. For example, wrap string conversions in exception handlers (like `try/catch` around `std::stoi`).
 - Ensure thread safety when bridging background operations back to the main GTK thread. Always use `g_idle_add` with proper validation checks (e.g., ensuring widgets have not been destroyed).
@@ -42,8 +43,10 @@ translations:
    ```
 
 4. **To add a brand-new language:**
-   - Append the language code to `po/LINGUAS`.
+   - Append the language code to `po/LINGUAS` (currently `es`, `ru`, `ja`).
    - Create `po/<lang>.po`, e.g. `msginit --input=po/iruka-xbps.pot --locale=<lang>`.
+   - Add the language to the `Options > Language` menu in `buildMenuBar()` and
+     handle its code in the saved-preference check.
    - Fill in the translations and rebuild (see targets above).
    - **English is not listed in `po/LINGUAS`**: it is the source language (the
      `msgid` strings) and needs no catalog. The language menu entry for English

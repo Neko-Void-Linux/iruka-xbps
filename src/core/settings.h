@@ -21,7 +21,6 @@ public:
   std::string selectedRepository() const { return m_selectedRepository; }
   void setSelectedRepository(const std::string &repo);
 
-  // UI language code (e.g. "es", "ru"); empty means follow the system locale.
   std::string uiLanguage() const { return m_uiLanguage; }
   void setUiLanguage(const std::string &lang);
 

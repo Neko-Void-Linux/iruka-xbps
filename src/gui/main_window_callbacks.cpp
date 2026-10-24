@@ -1,23 +1,10 @@
-// ----------------------------------------------------------------------------
-// main_window_callbacks.cpp — GTK signal callbacks for MainWindow
-//
-// Contains:
-//   - g_idle_add bridge callbacks (load_done_cb, info_done_cb, etc.)
-//   - All static MainWindow::cb_* GTK signal handler implementations
-// ----------------------------------------------------------------------------
 
 #include "main_window_private.h"
 #include "settings.h"
 
-// ============================================================================
-// g_idle_add bridge callbacks
-// These are called on the GTK main thread after a worker thread completes.
-// ============================================================================
 
-// Delivers loaded package data to the main thread after background fetch.
 gboolean load_done_cb(gpointer data) {
     auto *r = static_cast<LoadResult*>(data);
-    // Skip if the window was destroyed while the thread was running.
     if (!r->win->isDestroyed()) {
         r->win->applyLoadedPackages(std::move(r->merged), std::move(r->unreqSet),
                                     std::move(r->outdated));
@@ -26,10 +13,8 @@ gboolean load_done_cb(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Delivers fetched package info text to the main thread.
 gboolean info_done_cb(gpointer data) {
     auto *r = static_cast<InfoResult*>(data);
-    // Skip if the window was destroyed while the thread was running.
     if (!r->win->isDestroyed()) {
         r->win->applyPackageInfo(r->generation, r->infoText, r->filesText, r->sizeText);
     }
@@ -37,10 +22,8 @@ gboolean info_done_cb(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Signals the main thread that a privileged command has finished.
 gboolean exec_done_cb(gpointer data) {
     auto *r = static_cast<ExecResult*>(data);
-    // Skip if the window was destroyed while the thread was running.
     if (!r->win->isDestroyed()) {
         r->win->applyExecResult();
     }
@@ -48,10 +31,8 @@ gboolean exec_done_cb(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Delivers a chunk of command output text to the main thread.
 gboolean progress_chunk_cb(gpointer data) {
     auto *r = static_cast<ProgressChunk*>(data);
-    // Skip if the window was destroyed while the thread was running.
     if (!r->win->isDestroyed()) {
         r->win->appendProgressOutput(r->text);
     }
@@ -59,7 +40,6 @@ gboolean progress_chunk_cb(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// Rebuilds the UI after a language change, once the menu popup has closed.
 gboolean reload_ui_cb(gpointer data) {
     auto *r = static_cast<ReloadData*>(data);
     if (!r->win->isDestroyed()) {
@@ -69,9 +49,6 @@ gboolean reload_ui_cb(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
-// ============================================================================
-// View menu callbacks
-// ============================================================================
 
 void MainWindow::cb_menu_all(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->setView(ViewOption::All);
@@ -83,9 +60,6 @@ void MainWindow::cb_menu_notinstalled(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->setView(ViewOption::NotInstalled);
 }
 
-// ============================================================================
-// Transaction menu callbacks
-// ============================================================================
 
 void MainWindow::cb_menu_sync(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->do_sync();
@@ -100,9 +74,6 @@ void MainWindow::cb_menu_clear(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->clearTransaction();
 }
 
-// ============================================================================
-// Options / Help menu callbacks
-// ============================================================================
 
 void MainWindow::cb_menu_about(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->do_about();
@@ -111,7 +82,6 @@ void MainWindow::cb_menu_repositories(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->openRepositories();
 }
 
-// Options > Language radio item; only reacts to the item that was activated.
 void MainWindow::cb_menu_language(GtkWidget *w, gpointer d) {
     if (!gtk_check_menu_item_get_active(GTK_CHECK_MENU_ITEM(w))) return;
     auto *win = static_cast<MainWindow*>(d);
@@ -119,13 +89,7 @@ void MainWindow::cb_menu_language(GtkWidget *w, gpointer d) {
     win->setLanguage(lang ? lang : "");
 }
 
-// ============================================================================
-// Toolbar button callbacks
-// ============================================================================
 
-void MainWindow::cb_btn_sync(GtkWidget*, gpointer d) {
-    static_cast<MainWindow*>(d)->do_sync();
-}
 void MainWindow::cb_btn_upgrade(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->do_upgrade();
 }
@@ -136,9 +100,6 @@ void MainWindow::cb_btn_apply(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->commitTransaction();
 }
 
-// ============================================================================
-// Context-menu (popup) callbacks
-// ============================================================================
 
 void MainWindow::cb_popup_install(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->do_install();
@@ -146,16 +107,24 @@ void MainWindow::cb_popup_install(GtkWidget*, gpointer d) {
 void MainWindow::cb_popup_remove(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->do_remove();
 }
+void MainWindow::cb_popup_unmark(GtkWidget*, gpointer d) {
+    static_cast<MainWindow*>(d)->do_unmark();
+}
 
-// ============================================================================
-// Search callbacks
-// ============================================================================
+
+void MainWindow::cb_category_selected(GtkListBox*, GtkListBoxRow *row, gpointer d) {
+    if (!row) return;
+    auto *win = static_cast<MainWindow*>(d);
+    int kind = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row), "kind"));
+    const char *value = static_cast<const char*>(g_object_get_data(G_OBJECT(row), "value"));
+    win->applyCategory(kind, value ? value : "");
+}
+
 
 void MainWindow::cb_search(GtkWidget*, gpointer d) {
     static_cast<MainWindow*>(d)->onSearch();
 }
 
-// Resets and restarts the 300ms debounce timer on every keystroke.
 void MainWindow::cb_search_changed(GtkWidget*, gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     if (win->m_searchDebounceId) {
@@ -165,7 +134,6 @@ void MainWindow::cb_search_changed(GtkWidget*, gpointer d) {
     win->m_searchDebounceId = g_timeout_add(300, cb_search_debounce, win);
 }
 
-// Fires when the debounce timer expires; triggers the actual search.
 gboolean MainWindow::cb_search_debounce(gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     win->m_searchDebounceId = 0;
@@ -173,8 +141,6 @@ gboolean MainWindow::cb_search_debounce(gpointer d) {
     return G_SOURCE_REMOVE;
 }
 
-// Fires when the selection debounce expires; loads info/files/size for the
-// currently selected package.
 gboolean MainWindow::cb_size_debounce(gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     win->m_sizeDebounceId = 0;
@@ -182,9 +148,6 @@ gboolean MainWindow::cb_size_debounce(gpointer d) {
     return G_SOURCE_REMOVE;
 }
 
-// ============================================================================
-// Package table callbacks
-// ============================================================================
 
 void MainWindow::cb_table_select(GtkTreeSelection*, gpointer d) {
     static_cast<MainWindow*>(d)->onTableSelect();
@@ -194,7 +157,6 @@ void MainWindow::cb_row_activated(GtkTreeView*, GtkTreePath*, GtkTreeViewColumn*
     static_cast<MainWindow*>(d)->onTableSelect();
 }
 
-// Handles right-click on the tree view: selects the clicked row and shows the popup menu.
 gboolean MainWindow::cb_tree_button_press(GtkWidget *tv, GdkEventButton *event, gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     if (event->type != GDK_BUTTON_PRESS || event->button != GDK_BUTTON_SECONDARY)
@@ -207,23 +169,17 @@ gboolean MainWindow::cb_tree_button_press(GtkWidget *tv, GdkEventButton *event, 
         gtk_tree_selection_select_path(win->m_selection, path);
         gtk_tree_path_free(path);
     }
-    // Use gtk_menu_popup_at_pointer (replaces the deprecated gtk_menu_popup).
     gtk_menu_popup_at_pointer(GTK_MENU(win->m_popupMenu), (GdkEvent*)event);
     return TRUE;
 }
 
-// ============================================================================
-// Progress dialog callbacks
-// ============================================================================
 
-// Pulses the progress bar animation while a command is running.
 gboolean MainWindow::cb_progress_pulse(gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     gtk_progress_bar_pulse(GTK_PROGRESS_BAR(win->m_progressBar));
     return G_SOURCE_CONTINUE;
 }
 
-// Prevents the progress dialog from being closed while a transaction is running.
 gboolean MainWindow::cb_progress_delete(GtkWidget*, GdkEvent*, gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     if (win->m_transactionRunning) return TRUE;
@@ -231,7 +187,6 @@ gboolean MainWindow::cb_progress_delete(GtkWidget*, GdkEvent*, gpointer d) {
     return TRUE;
 }
 
-// Cancels the running command or closes the dialog if idle.
 void MainWindow::cb_progress_btn(GtkWidget*, gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     if (win->m_transactionRunning) {
@@ -241,20 +196,12 @@ void MainWindow::cb_progress_btn(GtkWidget*, gpointer d) {
     }
 }
 
-// ============================================================================
-// View menu toggle callback
-// ============================================================================
 
 void MainWindow::cb_toggle_details(GtkCheckMenuItem*, gpointer d) {
     static_cast<MainWindow*>(d)->toggleDetails();
 }
 
-// ============================================================================
-// Tree-view column resize callback
-// ============================================================================
 
-// Persists the user-adjusted column widths whenever the user drags a column
-// separator. The values are written to disk by Settings::save() on exit.
 void MainWindow::cb_col_width_changed(GtkTreeViewColumn*, GParamSpec*, gpointer d) {
     auto *win = static_cast<MainWindow*>(d);
     Settings::instance().setColumnWidths(

@@ -5,13 +5,11 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-// Returns the process-wide singleton Settings instance.
 Settings& Settings::instance() {
   static Settings s;
   return s;
 }
 
-// Returns the absolute path to the user config file, falling back to /tmp if HOME is not set.
 std::string Settings::getConfigPath() {
   const char *home = getenv("HOME");
   if (!home) home = "/tmp";
@@ -19,12 +17,10 @@ std::string Settings::getConfigPath() {
 }
 
 void Settings::load() {
-    // Determine the config file path and attempt to open it.
     std::string path = getConfigPath();
     std::ifstream f(path);
     if (!f.is_open()) return;
 
-    // Helper: parse an integer safely, returning a fallback value on parse failure.
     auto toInt = [](const std::string &s, int fallback) -> int {
         try { return std::stoi(s); }
         catch (...) { return fallback; }
@@ -32,7 +28,6 @@ void Settings::load() {
 
     std::string line;
     while (std::getline(f, line)) {
-        // Skip blank lines and comment lines starting with '#'.
         if (line.empty() || line[0] == '#') continue;
 
         auto pos = line.find('=');
@@ -52,7 +47,6 @@ void Settings::load() {
     }
 }
 
-// Serializes all settings to disk, creating the config directory if needed.
 void Settings::save() {
   const char *home = getenv("HOME");
   if (!home) return;

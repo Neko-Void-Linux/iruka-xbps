@@ -2,19 +2,28 @@
   <img src="resources/icons/iruka.png" alt="iruka-xbps logo" width="128">
 </p>
 
-# iruka-xbps
 
+# iruka-xbps
 A graphical front-end for the XBPS package manager, written in C++ using GTK 3.
+
+<img width="871" height="680" alt="image" src="https://github.com/user-attachments/assets/81225ccf-73ad-4e37-8d95-4f589ab26673" />
+
 
 ## Features
 
-- Local package searching and filtering.
+- Local package searching and filtering with a debounced search entry.
+- Category sidebar: All / Installed / Not installed / Outdated plus heuristic
+  categories (Multimedia, Office, Programming, Education, Graphics, Network,
+  Games, Security, System, Utilities, Other).
 - Visual package state representation (Installed, Not Installed, Outdated, Queued).
-- Detail panel showing package descriptions, metadata, and files.
-- Transaction queue to batch installation and removal operations.
-- Polkit integration via pkexec for system repository synchronization and package modifications.
+- Detail panel showing package descriptions, metadata, files and size.
+- Action queue to batch install, uninstall and unmark operations.
+- A single privileged helper daemon (`iruka-helper`) launched once through
+  pkexec/polkit; every privileged command is routed through it, so no repeated
+  password prompts appear. The helper exits when Iruka closes.
 - Repository configuration editor.
-- Multilingual interface (English, Spanish and Russian) with an in-app language switcher.
+- Multilingual interface (English, Spanish, Russian and Japanese) with an
+  in-app language switcher.
 
 ## Prerequisites
 
@@ -53,8 +62,11 @@ keep in mind:
   `msgfmt`/`xgettext`/`msgmerge`/`msginit` to compile the `.mo` catalogs, and
   xbps-src chroots only install what is listed there. Without it the package
   ships with no translations.
-- The catalogs are installed under `/usr/share/locale/{es,ru}/LC_MESSAGES/`,
+- The catalogs are installed under `/usr/share/locale/{es,ru,ja}/LC_MESSAGES/`,
   which matches the `LOCALEDIR` compiled into the binary.
+- Two binaries are installed: `iruka-xbps` (GUI) and `iruka-helper` (privileged
+  daemon). They must live in the same directory, because the GUI locates the
+  helper next to its own executable.
 - The `distfiles`/`checksum` fields reference a GitHub release tarball. After
   changing the source, regenerate the tarball and update the `checksum` field
   (e.g. `xbps-src digest iruka-xbps`), otherwise the package is built from

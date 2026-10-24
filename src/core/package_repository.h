@@ -18,6 +18,7 @@ public:
     std::string version;
     std::string description;
     std::string comment;
+    std::string category;
     std::string outdatedVersion;
     std::string installedOn;
     double downloadSize = 0.0;

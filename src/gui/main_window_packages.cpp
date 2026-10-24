@@ -1,16 +1,3 @@
-// ----------------------------------------------------------------------------
-// main_window_packages.cpp — Package list loading and display for MainWindow
-//
-// Contains:
-//   - loadPackageList()       background thread that fetches all package data
-//   - applyLoadedPackages()   applies fetched data on the main thread
-//   - populateTable()         rebuilds the GtkListStore from the model
-//   - refreshStatusBar()      updates the package count display
-//   - onSearch()              applies filters based on the search entry
-//   - onTableSelect()         handles row selection changes
-//   - showPackageInfo()       shows basic info immediately + fetches details async
-//   - applyPackageInfo()      updates the info panel on the main thread
-// ----------------------------------------------------------------------------
 
 #include "main_window_private.h"
 #include "xbps_command.h"
@@ -22,10 +9,10 @@
 #include <thread>
 #include <mutex>
 #include <map>
+#include <vector>
+#include <algorithm>
 #include <cstdio>
 
-// Starts a background thread that fetches local, remote, and outdated package lists,
-// then marshals the result back to the main thread via g_idle_add.
 void MainWindow::loadPackageList() {
     if (m_loading) return;
     m_loading = true;
@@ -34,27 +21,20 @@ void MainWindow::loadPackageList() {
     result->win = this;
 
     std::thread([result]() {
-        // Fetch installed packages and all remote packages in parallel conceptually,
-        // but sequentially here since both calls block on xbps-query.
         auto localPkgs  = XBPSCommand::getLocalPackageList();
         auto remotePkgs = XBPSCommand::getRemotePackageList();
 
-        // Merge strategy: start from remote packages (canonical source for metadata),
-        // then overlay local install status and version from the local query.
         std::map<std::string, PackageListData*> pkgMap;
         for (auto &pkg : remotePkgs) {
             auto *np = new PackageListData(std::move(pkg));
             auto it  = pkgMap.find(np->name);
             if (it != pkgMap.end()) {
-                // Prefer the last seen remote entry (usually most up-to-date).
                 delete it->second;
                 it->second = np;
             } else {
                 pkgMap[np->name] = np;
             }
         }
-        // Overlay local data: update version and install status for known packages,
-        // or add locally-only packages that are absent from the remote index.
         for (auto &pkg : localPkgs) {
             auto it = pkgMap.find(pkg.name);
             if (it != pkgMap.end()) {
@@ -68,7 +48,6 @@ void MainWindow::loadPackageList() {
             }
         }
 
-        // Flatten the map into the result vector and free the temporary heap objects.
         for (auto &[name, pkg] : pkgMap) {
             result->merged.push_back(std::move(*pkg));
             delete pkg;
@@ -83,28 +62,20 @@ void MainWindow::loadPackageList() {
     }).detach();
 }
 
-// Called on the main thread with the results from the background loader thread.
-// Updates the repository, model, and table view.
 void MainWindow::applyLoadedPackages(std::vector<PackageListData> &&packages,
                                      std::set<std::string>         &&unreqSet,
                                      std::map<std::string, OutdatedPackageInfo> &&outdated) {
-    // Clear the list store first to invalidate all stored PackageData pointers
-    // before the repository deletes the underlying objects in setData().
     gtk_list_store_clear(m_listStore);
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_repo.setData(packages, unreqSet);
         m_repo.markOutdatedPackages(outdated);
-        m_model->applyFilter(Settings::instance().viewOption());
-        m_model->sort(PackageModel::ColName, true);
     }
 
-    populateTable();
-    refreshStatusBar();
     m_loading = false;
+    applyFilters();
 }
 
-// Repopulates the GtkListStore from the current PackageModel filtered list.
 void MainWindow::populateTable() {
     gtk_list_store_clear(m_listStore);
 
@@ -117,9 +88,6 @@ void MainWindow::populateTable() {
         GtkTreeIter iter;
         gtk_list_store_append(m_listStore, &iter);
 
-        // Determine the status indicator character:
-        // 'X' = queued for removal, 'I' = queued for install,
-        // '!' = outdated, '@' = installed, ' ' = not installed.
         std::string status;
         if      (m_removeMarks.count(pkg->name) > 0) status = "X";
         else if (m_installMarks.count(pkg->name) > 0) status = "I";
@@ -137,7 +105,6 @@ void MainWindow::populateTable() {
     }
 }
 
-// Updates the status bar text with current package totals.
 void MainWindow::refreshStatusBar() {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -161,29 +128,46 @@ void MainWindow::refreshStatusBar() {
     gtk_statusbar_push(GTK_STATUSBAR(m_statusbar), m_statusContextId, ss.str().c_str());
 }
 
-// Handles the search entry change: re-applies the view filter then the text filter.
-void MainWindow::onSearch() {
-    const char *text  = gtk_entry_get_text(GTK_ENTRY(m_searchEntry));
-    std::string query = text ? text : "";
-    ViewOption view   = Settings::instance().viewOption();
+void MainWindow::applyFilters() {
+  const char *text  = gtk_entry_get_text(GTK_ENTRY(m_searchEntry));
+  std::string query = text ? text : "";
+  ViewOption view   = Settings::instance().viewOption();
 
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        // View filter must be applied first; the text filter narrows the result.
-        m_model->applyFilter(view);
-        if (!query.empty()) {
-            m_model->applyFilter(query);
-        }
-        m_model->sort(PackageModel::ColName, true);
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_model->applyFilter(view, "", m_selectedCategory);
+    if (!query.empty()) {
+      m_model->applyFilter(query);
     }
-    populateTable();
-    refreshStatusBar();
+    m_model->sort(PackageModel::ColName, true);
+  }
+  populateTable();
+  refreshStatusBar();
 }
 
-// Called when the selected row changes. Debounces the heavy info/size fetch so
-// that rapidly selecting several rows only triggers one lookup, and clears the
-// Size tab so it never shows stale data from a previous selection.
+void MainWindow::onSearch() {
+  applyFilters();
+}
+
+void MainWindow::applyCategory(int kind, const std::string &value) {
+  switch (kind) {
+    case 0: setView(ViewOption::All); break;
+    case 1: setView(ViewOption::Installed); break;
+    case 2: setView(ViewOption::NotInstalled); break;
+    case 3: setView(ViewOption::Outdated); break;
+    case 5:
+      m_selectedCategory = value;
+      Settings::instance().setViewOption(ViewOption::All);
+      applyFilters();
+      break;
+    default:
+      break;
+  }
+}
+
 void MainWindow::onTableSelect() {
+    if (m_rebuilding || m_destroyed.load()) return;
+
     gtk_text_buffer_set_text(m_sizeBuffer, "", -1);
 
     if (m_sizeDebounceId) {
@@ -193,8 +177,6 @@ void MainWindow::onTableSelect() {
     m_sizeDebounceId = g_timeout_add(250, cb_size_debounce, this);
 }
 
-// Fires after the selection debounce elapses; fetches info/files/size for the
-// currently selected package.
 void MainWindow::onSelectionDebounced() {
     GtkTreeIter  iter;
     GtkTreeModel *model = GTK_TREE_MODEL(m_listStore);
@@ -209,13 +191,11 @@ void MainWindow::onSelectionDebounced() {
     if (row >= 0) showPackageInfo(row);
 }
 
-// Shows basic info immediately, then launches a thread to fetch full details.
 void MainWindow::showPackageInfo(int row) {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto *pkg = m_model->getData(row);
     if (!pkg) return;
 
-    // Build the quick header that is displayed immediately without blocking the UI.
     std::ostringstream ss;
     ss << _("Name:")         << " " << pkg->name        << "\n";
     ss << _("Version:")      << " " << pkg->version     << "\n";
@@ -230,8 +210,6 @@ void MainWindow::showPackageInfo(int row) {
     result->generation = ++m_infoGeneration;
     result->infoText   = ss.str();
 
-    // Show the basic header right away; the blocking xbps-query calls and the
-    // file listing are gathered off the UI thread.
     gtk_text_buffer_set_text(m_infoBuffer, ss.str().c_str(), -1);
     gtk_text_buffer_set_text(m_filesBuffer, "", -1);
 
@@ -265,7 +243,6 @@ void MainWindow::showPackageInfo(int row) {
         }
         result->infoText += ss.str();
 
-        // Size tab: installed size (installed packages) and download size.
         std::ostringstream sizeSs;
         sizeSs << _("Name:")           << " " << pkgName                     << "\n";
         sizeSs << _("Download Size:")  << "   " << info.downloadSizeAsString << "\n";
@@ -281,11 +258,9 @@ void MainWindow::showPackageInfo(int row) {
     }).detach();
 }
 
-// Called on the main thread to update the info/files/size buffers with fetched data.
 void MainWindow::applyPackageInfo(int generation, const std::string &infoText,
                                   const std::string &filesText,
                                   const std::string &sizeText) {
-    // Discard stale results from a previous selection that arrived late.
     if (generation != m_infoGeneration) return;
     gtk_text_buffer_set_text(m_infoBuffer,  infoText.c_str(),  -1);
     gtk_text_buffer_set_text(m_filesBuffer, filesText.c_str(), -1);

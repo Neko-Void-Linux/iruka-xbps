@@ -19,22 +19,25 @@ In alignment with these traits, this graphical interface was designed to be:
 
 `iruka-xbps` acts as a fast desktop package manager client for Void Linux's XBPS package manager. It provides a visual platform to:
 1. Search and filter local, remote, and outdated packages.
-2. View detailed package descriptions, properties, metadata, and files.
-3. Queue multiple install/remove transactions to apply them sequentially.
-4. Elevate privileges cleanly via Polkit (`pkexec`) for sync, update, install, and remove actions.
-5. Manage target package repositories.
+2. Browse packages by status and heuristic categories through a side panel.
+3. View detailed package descriptions, properties, metadata, files and size.
+4. Queue multiple install/remove actions, unmark queued packages, and apply them sequentially.
+5. Execute sync, update, install and remove actions as root through a single
+   privileged helper daemon launched once via Polkit (`pkexec`).
+6. Manage target package repositories.
 
 ---
 
 ## Internationalization (i18n)
 
 The interface is fully translatable through **gettext**. The `Options > Language`
-menu offers **English**, **Español** (`es`) and **Русский** (`ru`), plus
-**System (default)**, which follows the user's system locale.
+menu offers **English**, **Español** (`es`), **Русский** (`ru`) and
+**日本語** (`ja`), plus **System (default)**, which follows the user's system
+locale.
 
 English is the source language (the `msgid` strings), so it needs no catalog:
-selecting it makes gettext fall back to the untranslated strings. Spanish and
-Russian ship as compiled `.mo` catalogs.
+selecting it makes gettext fall back to the untranslated strings. Spanish,
+Russian and Japanese ship as compiled `.mo` catalogs.
 
 ### Language resolution priority
 
@@ -89,10 +92,10 @@ ninja -C builddir                  # full rebuild; .mo catalogs are compiled too
 
 The `Options > Language` menu is built in `buildMenuBar()` as a group of
 `GtkRadioMenuItem`s — **System (default)** (`""`), **English** (`"en"`),
-**Español** (`"es"`) and **Русский** (`"ru"`) — each carrying its language
-code in a `"lang"` data field. The active entry is set from the saved
-`ui_language` preference. English maps to `"en"` and works without a catalog:
-gettext falls back to the `msgid` strings.
+**Español** (`"es"`), **Русский** (`"ru"`) and **日本語** (`"ja"`) — each
+carrying its language code in a `"lang"` data field. The active entry is set
+from the saved `ui_language` preference. English maps to `"en"` and works
+without a catalog: gettext falls back to the `msgid` strings.
 
 Two details matter when touching this code:
 
@@ -110,38 +113,63 @@ Two details matter when touching this code:
 The project is structured into distinct layers to separate the UI toolkit, data storage model, and back-end process executor.
 
 ```
-neko-xbps/
-├── meson.build                        # Build definition
+iruka-xbps/
+├── meson.build                        # Build definition (GUI + privileged helper)
 ├── README.md                          # Quick installation guidelines
+├── CONTRIBUTING.md                    # Coding standards and i18n workflow
+├── doc.md                             # This document
+├── po/                                # gettext catalogs (LINGUAS, POTFILES.in, <lang>.po)
+├── resources/icons/                   # Application icon (SVG + PNG)
 ├── src/
-│   ├── main.cpp                       # App entry point & toolkit initialization
+│   ├── main.cpp                       # App entry point, i18n setup, toolkit init
+│   │
+│   ├── helper/
+│   │   └── main.cpp                   # iruka-helper: privileged command daemon
 │   │
 │   ├── core/                          # Backend business logic (Core)
-│   │   ├── constants.h                # Hardcoded binary paths and keys
+│   │   ├── constants.h                # Binary paths, app identity, enums
 │   │   ├── package.h / .cpp           # Metadata structure and xbps console parsers
-│   │   ├── package_model.h / .cpp     # Table sorting and view filter logic
-│   │   ├── package_repository.h / .cpp# Thread-safe in-memory package registry
+│   │   ├── package_model.h / .cpp     # Sorting and view/repository/category filters
+│   │   ├── package_repository.h / .cpp# In-memory package registry and categories
+│   │   ├── category.h / .cpp          # Heuristic package categorisation
+│   │   ├── privileged_daemon.h / .cpp # Client for the privileged helper process
 │   │   ├── settings.h / .cpp          # Persistent configuration parser
 │   │   ├── utils.h / .cpp             # Shell, socket and locale-dir resolution utilities
 │   │   └── xbps_command.h / .cpp      # Command-line interface integrations
 │   │
-│   ├── gui/                           # User Interface components (GTK 3)
-│   │   ├── i18n.h                     # _()/N_() gettext macros and LOCALEDIR fallback
-│   │   ├── i18n_strings.cpp           # Translation extraction markers for constant strings
-│   │   ├── logo.h / .cpp              # Embedded logo loader (GdkPixbuf)
-│   │   ├── logo_data.h                # Logo PNG bytes (generated by xxd, do not edit)
-│   │   ├── theme.h / .cpp             # Custom stylesheet application
-│   │   ├── repository_editor.h / .cpp # Config window for repositories
-│   │   ├── main_window.h              # Public MainWindow class definition
-│   │   ├── main_window_private.h      # Shared structs for thread marshalling & COL indices
-│   │   ├── main_window.cpp            # MainWindow lifecycle (ctors/dtor)
-│   │   ├── main_window_ui.cpp         # Main layout & widget construction
-│   │   ├── main_window_callbacks.cpp  # UI action handlers & thread idle dispatchers
-│   │   ├── main_window_packages.cpp   # Package loader thread & detail formatting
-│   │   ├── main_window_transaction.cpp# Batch transaction operations
-│   │   └── main_window_exec.cpp       # Process execution and progress reporting
-│   └── po/                            # gettext catalogs (LINGUAS, POTFILES.in, <lang>.po)
+│   └── gui/                           # User Interface components (GTK 3)
+│       ├── i18n.h                     # _()/N_() gettext macros and LOCALEDIR fallback
+│       ├── i18n_strings.cpp           # Translation extraction markers for constant strings
+│       ├── logo.h / .cpp              # Embedded logo loader (GdkPixbuf)
+│       ├── logo_data.h                # Logo PNG bytes (generated by xxd, do not edit)
+│       ├── theme.h / .cpp             # Custom stylesheet application
+│       ├── repository_editor.h / .cpp # Config window for repositories
+│       ├── main_window.h              # Public MainWindow class definition
+│       ├── main_window_private.h      # Shared structs for thread marshalling & COL indices
+│       ├── main_window.cpp            # MainWindow lifecycle (ctors/dtor)
+│       ├── main_window_ui.cpp         # Main layout, sidebar, menus & widget construction
+│       ├── main_window_callbacks.cpp  # UI action handlers & thread idle dispatchers
+│       ├── main_window_packages.cpp   # Package loader thread, filters & detail formatting
+│       ├── main_window_actions.cpp    # View/language/about actions
+│       ├── main_window_transaction.cpp# Action queue (mark/unmark/apply/clear)
+│       └── main_window_exec.cpp       # Privileged execution and progress reporting
 ```
+
+### Privileged helper (`iruka-helper`)
+
+The GUI never runs as root. At startup it launches `iruka-helper` once through
+`pkexec`, producing a single polkit prompt. All privileged commands (sync,
+update, install, remove and repository file writes) are sent to that long-lived
+helper, which executes them as root and streams their output back.
+
+- `PrivilegedDaemon` (`core/privileged_daemon.*`) owns the pipes and sends a
+  shell command per request; it reads output until the `__IRUKA_DONE__ <status>`
+  sentinel and supports cancellation by sending `CANCEL`.
+- The helper exits when its stdin closes (Iruka quits), and it also terminates
+  via `PR_SET_PDEATHSIG` / `SIGPIPE` if the GUI dies unexpectedly, killing any
+  running child in the process group.
+- Both binaries must reside in the same directory: the GUI resolves the helper
+  next to its own executable (`/proc/self/exe`).
 
 ### Embedded logo
 
@@ -160,5 +188,6 @@ is installed. Regenerate `logo_data.h` whenever the source PNG changes.
 ### Key Design Patterns
 
 - **Separation of Concerns**: Core logic runs independently of the GTK thread. The backend queries data (`xbps_command`) and parses it into records (`package`) without knowledge of UI components.
-- **Asynchronous Execution & Marshalling**: Long-running operations (like reading local package lists or running package transactions) spawn worker threads. These threads post final structs back to the GTK main thread using `g_idle_add`.
+- **Asynchronous Execution & Marshalling**: Long-running operations (such as reading local package lists or formatting package details) spawn worker threads. These threads post results back to the GTK main thread using `g_idle_add`, guarded against a destroyed window.
+- **Single Privilege Elevation**: Instead of invoking `pkexec` for every operation, one helper daemon is authenticated at startup and reused for all privileged commands, then torn down with the application.
 - **Private Implementations**: Internal structures, enum layout markers, and GTK-specific callbacks for the main window are isolated in `main_window_private.h` to keep the public interface in `main_window.h` clean and decoupled.

@@ -35,9 +35,6 @@ public:
   static bool cleanCache(OutputCallback cb = nullptr);
 
 private:
-  // Runs a child process and captures its stdout.
-  // When forceLocale is true, 'env LANG=C LC_MESSAGES=C LC_ALL=C' is prepended so that
-  // xbps tool output is always in English and can be reliably parsed.
   static std::string runProcess(const std::string &bin,
                                 const std::vector<std::string> &args,
                                 bool forceLocale = false);

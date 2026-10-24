@@ -23,10 +23,8 @@ public:
 
   void show();
 
-  // Called from worker threads (guarded, safe)
   void loadPackageList();
 
-  // UI actions (main thread)
   void do_sync();
   void do_upgrade();
   void do_install();
@@ -34,8 +32,6 @@ public:
   void do_about();
   void openRepositories();
   void setLanguage(const std::string &lang);
-  // Rebuilds the whole UI in place (used to apply a language change without
-  // restarting the process). Safe to call only from the main thread.
   void reloadUi();
   void setView(ViewOption v);
   void onSearch();
@@ -43,7 +39,6 @@ public:
   void commitTransaction();
   void clearTransaction();
 
-  // Marshaled results (main thread)
   void applyLoadedPackages(std::vector<PackageListData> &&packages,
                            std::set<std::string> &&unreqSet,
                            std::map<std::string, OutdatedPackageInfo> &&outdated);
@@ -52,8 +47,6 @@ public:
   void applyExecResult();
   void appendProgressOutput(const std::string &text);
 
-  // Returns true if the window has been destroyed.
-  // Used by free-function g_idle_add callbacks to skip work on a dead window.
   bool isDestroyed() const { return m_destroyed.load(); }
 
 private:
@@ -62,16 +55,22 @@ private:
   void buildToolbar();
   void buildSearchBar();
   void buildPackageTable();
+  void buildCategoryPanel();
+  GtkListBoxRow *addCategoryRow(const std::string &label, int kind,
+                                const std::string &repo);
   void buildInfoPanel();
   void buildStatusBar();
   void buildPopupMenu();
 
   void populateTable();
   void refreshStatusBar();
+  void applyFilters();
+  void applyCategory(int kind, const std::string &repo);
   void onSelectionDebounced();
   void showPackageInfo(int row);
   void setPackageStatus(const std::string &pkgName, const std::string &status);
   void addToTransaction(const std::string &pkgName, bool install);
+  void do_unmark();
   void execWithPrivileges(const std::vector<std::string> &args);
   void runCommandQueue();
   void startNextCommand();
@@ -81,7 +80,6 @@ private:
   void onCancelProgress();
   void toggleDetails();
 
-  // --- Callbacks ---
   static void cb_menu_all(GtkWidget *w, gpointer d);
   static void cb_menu_installed(GtkWidget *w, gpointer d);
   static void cb_menu_notinstalled(GtkWidget *w, gpointer d);
@@ -92,12 +90,13 @@ private:
   static void cb_menu_about(GtkWidget *w, gpointer d);
   static void cb_menu_repositories(GtkWidget *w, gpointer d);
   static void cb_menu_language(GtkWidget *w, gpointer d);
-  static void cb_btn_sync(GtkWidget *w, gpointer d);
   static void cb_btn_upgrade(GtkWidget *w, gpointer d);
   static void cb_btn_refresh(GtkWidget *w, gpointer d);
   static void cb_btn_apply(GtkWidget *w, gpointer d);
   static void cb_popup_install(GtkWidget *w, gpointer d);
   static void cb_popup_remove(GtkWidget *w, gpointer d);
+  static void cb_popup_unmark(GtkWidget *w, gpointer d);
+  static void cb_category_selected(GtkListBox *box, GtkListBoxRow *row, gpointer d);
   static void cb_search(GtkWidget *w, gpointer d);
   static void cb_search_changed(GtkWidget *w, gpointer d);
   static gboolean cb_search_debounce(gpointer d);
@@ -111,12 +110,10 @@ private:
   static void cb_toggle_details(GtkCheckMenuItem *item, gpointer d);
   static void cb_col_width_changed(GtkTreeViewColumn *col, GParamSpec *pspec, gpointer d);
 
-  // --- Widgets ---
   GtkWidget *m_window;
   GtkWidget *m_menuBar;
   GtkWidget *m_toolbar;
   GtkWidget *m_searchBar;
-  GtkWidget *m_btnSync;
   GtkWidget *m_btnUpgrade;
   GtkWidget *m_btnRefresh;
   GtkWidget *m_btnApply;
@@ -126,7 +123,11 @@ private:
   GtkListStore *m_listStore;
   GtkTreeSelection *m_selection;
 
-  // Package table columns (kept to persist user-adjusted widths).
+  GtkWidget *m_categoryList;
+  GtkWidget *m_categoryScroll;
+  GtkWidget *m_outerPaned;
+  std::string m_selectedCategory;
+
   GtkTreeViewColumn *m_colName = nullptr;
   GtkTreeViewColumn *m_colVersion = nullptr;
 
@@ -150,17 +151,14 @@ private:
 
   RepositoryEditor *m_repoEditor = nullptr;
 
-  // --- State ---
   PackageRepository m_repo;
   PackageModel *m_model;
   std::vector<std::string> m_transactionInstall;
   std::vector<std::string> m_transactionRemove;
 
-  // Marks shown in the package list status column
   std::set<std::string> m_installMarks;
   std::set<std::string> m_removeMarks;
 
-  // Sequential command queue (run one at a time)
   struct ExecStep {
     std::vector<std::string> args;
     std::string label;
@@ -168,7 +166,6 @@ private:
   std::vector<ExecStep> m_commandQueue;
   bool m_transactionRunning = false;
 
-  // Progress dialog
   GtkWidget *m_progressDialog = nullptr;
   GtkWidget *m_progressLabel;
   GtkWidget *m_progressBar;
@@ -178,27 +175,20 @@ private:
   GtkWidget *m_progressButton;
   guint m_progressTimerId = 0;
 
-  // Cancel support
   std::atomic<int> m_activeChild{0};
   std::atomic<bool> m_cancelRequested{false};
 
-  // Search debounce
   guint m_searchDebounceId = 0;
 
-  // Selection debounce for the Size notebook tab (avoids stale lookups when
-  // the user rapidly selects several rows).
   guint m_sizeDebounceId = 0;
 
-  // Stale async package-info guard
   int m_infoGeneration = 0;
 
-  // Guards against callbacks firing after the window has been destroyed.
   std::atomic<bool> m_destroyed{false};
 
   std::mutex m_mutex;
   std::atomic<bool> m_loading{false};
 
-  // Guards against re-entrant UI rebuilds (rapid consecutive language changes).
   bool m_rebuilding = false;
 };
 
