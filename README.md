@@ -2,9 +2,12 @@
   <img src="resources/icons/iruka.png" alt="iruka-xbps logo" width="128">
 </p>
 
-# iruka-xbps
 
+# iruka-xbps
 A graphical front-end for the XBPS package manager, written in C++ using GTK 3.
+
+<img width="871" height="680" alt="image" src="https://github.com/user-attachments/assets/81225ccf-73ad-4e37-8d95-4f589ab26673" />
+
 
 ## Features
 
